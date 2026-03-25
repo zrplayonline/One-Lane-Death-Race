@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>One Lane Death Race</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -18,6 +18,17 @@
             height: 100vh;
             color: white;
             font-family: system-ui, -apple-system, sans-serif;
+            touch-action: none;
+        }
+
+        #game-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            max-height: 100vh;
+            padding: 10px;
+            box-sizing: border-box;
         }
 
         #game-container {
@@ -27,18 +38,21 @@
             border-radius: 12px;
             overflow: hidden;
             background: #1e293b;
+            flex-shrink: 1;
         }
 
         canvas {
             display: block;
             image-rendering: pixelated;
+            max-height: 70vh; /* Ensure canvas doesn't push controls off screen */
+            width: auto;
         }
 
         .ui-overlay {
             position: absolute;
-            top: 1rem;
-            left: 1rem;
-            right: 1rem;
+            top: 0.75rem;
+            left: 0.75rem;
+            right: 0.75rem;
             display: flex;
             justify-content: space-between;
             pointer-events: none;
@@ -48,19 +62,19 @@
 
         .score-value {
             font-family: 'Courier New', Courier, monospace;
-            font-size: 2.5rem;
+            font-size: 2rem;
             font-weight: 900;
             color: #fbbf24;
         }
 
         .status-badge {
             display: inline-block;
-            padding: 0.25rem 0.75rem;
+            padding: 0.15rem 0.5rem;
             background: rgba(34, 197, 94, 0.2);
             border: 1px solid rgb(34, 197, 94);
             color: rgb(74, 222, 128);
             border-radius: 9999px;
-            font-size: 0.875rem;
+            font-size: 0.75rem;
             font-weight: 600;
         }
 
@@ -75,6 +89,7 @@
             z-index: 20;
             text-align: center;
             backdrop-filter: blur(4px);
+            padding: 20px;
         }
 
         .intense-mode {
@@ -87,7 +102,6 @@
             100% { border-color: #334155; }
         }
 
-        /* Hit Shake Animation */
         .shake {
             animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both;
         }
@@ -98,60 +112,80 @@
             30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
             40%, 60% { transform: translate3d(4px, 0, 0); }
         }
+
+        .control-btn {
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+            touch-action: none;
+        }
     </style>
 </head>
 <body>
 
-    <div class="mb-4 text-center">
-        <h1 class="text-2xl font-bold tracking-tight text-white uppercase italic">One Lane Death Race</h1>
-        <p class="text-slate-500 text-xs tracking-[0.2em] uppercase">Status: Engine Online</p>
-    </div>
-
-    <div id="game-container">
-        <canvas id="gameCanvas"></canvas>
-        
-        <div class="ui-overlay">
-            <div>
-                <div id="difficulty-badge" class="status-badge">Normal</div>
-                <div id="fps-counter" class="text-xs mt-2 text-slate-400">60 FPS</div>
-            </div>
-            <div class="text-right">
-                <div class="text-[10px] uppercase tracking-widest text-slate-400">Distance</div>
-                <div id="score-display" class="score-value">0000</div>
-            </div>
+    <div id="game-wrapper">
+        <div class="mb-3 text-center">
+            <h1 class="text-xl font-bold tracking-tight text-white uppercase italic">One Lane Death Race</h1>
+            <p class="text-slate-500 text-[10px] tracking-[0.2em] uppercase">Engine Status: Online</p>
         </div>
 
-        <!-- Game Over UI -->
-        <div id="game-over-screen">
-            <div class="mb-2">
-                <h2 class="text-6xl font-black text-red-600 mb-2 italic tracking-tighter uppercase">Game Over</h2>
-            </div>
-            <div class="mb-8">
-                <p class="text-slate-400 uppercase tracking-[0.3em] text-xs mb-1">Final Distance</p>
-                <div id="final-score" class="text-7xl font-bold text-white">0</div>
-                <div id="high-score-wrap" class="mt-2 hidden">
-                    <span class="bg-amber-500 text-black text-[10px] font-bold px-2 py-0.5 rounded-sm uppercase tracking-tighter">New Record</span>
+        <div id="game-container">
+            <canvas id="gameCanvas"></canvas>
+            
+            <div class="ui-overlay">
+                <div>
+                    <div id="difficulty-badge" class="status-badge">Normal</div>
+                    <div id="fps-counter" class="text-[10px] mt-1 text-slate-400">60 FPS</div>
+                </div>
+                <div class="text-right">
+                    <div class="text-[9px] uppercase tracking-widest text-slate-400">Dist</div>
+                    <div id="score-display" class="score-value">0000</div>
                 </div>
             </div>
-            
-            <div class="flex flex-col gap-4">
-                <button id="restart-btn" class="px-12 py-4 bg-white text-slate-950 font-black rounded-sm hover:bg-amber-400 transition-all active:scale-95 uppercase tracking-widest text-lg shadow-xl shadow-white/10">
-                    Play Again
-                </button>
-                <p class="text-slate-500 text-[10px] uppercase tracking-[0.2em]">or press <span class="text-slate-300 font-bold underline">Enter</span></p>
+
+            <!-- Game Over UI -->
+            <div id="game-over-screen">
+                <div class="mb-2">
+                    <h2 class="text-5xl font-black text-red-600 mb-2 italic tracking-tighter uppercase">Game Over</h2>
+                </div>
+                <div class="mb-6">
+                    <p class="text-slate-400 uppercase tracking-[0.3em] text-[10px] mb-1">Final Distance</p>
+                    <div id="final-score" class="text-6xl font-bold text-white">0</div>
+                    <div id="high-score-wrap" class="mt-2 hidden">
+                        <span class="bg-amber-500 text-black text-[9px] font-bold px-2 py-0.5 rounded-sm uppercase">New Record</span>
+                    </div>
+                </div>
+                
+                <div class="flex flex-col gap-3">
+                    <button id="restart-btn" class="px-10 py-3 bg-white text-slate-950 font-black rounded-sm hover:bg-amber-400 transition-all active:scale-95 uppercase tracking-widest text-base shadow-xl">
+                        Play Again
+                    </button>
+                    <p class="text-slate-500 text-[9px] uppercase tracking-[0.2em]">press <span class="text-slate-300 font-bold underline">Enter</span></p>
+                </div>
             </div>
         </div>
-    </div>
 
-    <div class="mt-6 text-slate-500 text-sm text-center">
-        <span class="text-slate-400">ARROWS TO WEAVE</span><br>
-        Speed Multiplier: <span id="difficulty-level" class="text-amber-500 font-mono">1.0x</span>
+        <!-- Integrated Controls Box -->
+        <div class="w-full max-w-[450px] mt-4 flex flex-col items-center">
+            <div class="flex gap-10 items-center justify-center w-full">
+                <button id="btn-left" class="control-btn w-16 h-16 bg-slate-800 border-b-4 border-slate-950 active:border-b-0 active:translate-y-1 rounded-2xl flex items-center justify-center shadow-lg transition-all group">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="text-slate-400 group-active:text-white"><path d="m15 18-6-6 6-6"/></svg>
+                </button>
+                
+                <div class="text-center px-4">
+                    <div class="text-[9px] text-slate-500 uppercase tracking-widest mb-1">Speed</div>
+                    <div id="difficulty-level" class="text-amber-500 font-mono text-lg font-bold">1.0x</div>
+                </div>
+
+                <button id="btn-right" class="control-btn w-16 h-16 bg-slate-800 border-b-4 border-slate-950 active:border-b-0 active:translate-y-1 rounded-2xl flex items-center justify-center shadow-lg transition-all group">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="text-slate-400 group-active:text-white"><path d="m9 18 6-6-6-6"/></svg>
+                </button>
+            </div>
+        </div>
     </div>
 
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
-        const fpsDisplay = document.getElementById('fps-counter');
         const scoreDisplay = document.getElementById('score-display');
         const finalScoreDisplay = document.getElementById('final-score');
         const highScoreWrap = document.getElementById('high-score-wrap');
@@ -160,6 +194,8 @@
         const difficultyValueDisplay = document.getElementById('difficulty-level');
         const gameContainer = document.getElementById('game-container');
         const restartBtn = document.getElementById('restart-btn');
+        const btnLeft = document.getElementById('btn-left');
+        const btnRight = document.getElementById('btn-right');
 
         const config = {
             width: 450, 
@@ -198,11 +234,24 @@
         };
 
         function initCanvas() {
+            const wrapper = document.getElementById('game-wrapper');
+            const availableWidth = window.innerWidth * 0.95;
+            const availableHeight = window.innerHeight * 0.65;
+            
             canvas.width = config.width;
             canvas.height = config.height;
-            const scale = Math.min((window.innerWidth * 0.9) / config.width, (window.innerHeight * 0.8) / config.height);
+            
+            const scale = Math.min(availableWidth / config.width, availableHeight / config.height);
             canvas.style.width = `${config.width * scale}px`;
             canvas.style.height = `${config.height * scale}px`;
+        }
+
+        function moveLeft() {
+            if (gameState === 'PLAYING') player.lane = Math.max(0, player.lane - 1);
+        }
+
+        function moveRight() {
+            if (gameState === 'PLAYING') player.lane = Math.min(config.laneCount - 1, player.lane + 1);
         }
 
         function spawnEnemy() {
@@ -212,7 +261,6 @@
             } while (randomLane === lastLane);
             
             lastLane = randomLane;
-
             enemies.push({
                 lane: randomLane,
                 x: laneX[randomLane],
@@ -246,12 +294,14 @@
             lastSpawnTime = performance.now();
         }
 
-        restartBtn.addEventListener('click', resetGame);
+        restartBtn.addEventListener('click', (e) => { e.stopPropagation(); resetGame(); });
+        btnLeft.addEventListener('pointerdown', (e) => { e.preventDefault(); moveLeft(); });
+        btnRight.addEventListener('pointerdown', (e) => { e.preventDefault(); moveRight(); });
 
         window.addEventListener('keydown', (e) => {
             if (gameState === 'PLAYING') {
-                if (e.key === 'ArrowLeft') player.lane = Math.max(0, player.lane - 1);
-                if (e.key === 'ArrowRight') player.lane = Math.min(config.laneCount - 1, player.lane + 1);
+                if (e.key === 'ArrowLeft') moveLeft();
+                if (e.key === 'ArrowRight') moveRight();
             } else if (gameState === 'GAMEOVER' && e.key === 'Enter') {
                 resetGame();
             }
@@ -260,18 +310,13 @@
         function gameLoop(timestamp) {
             const deltaTime = timestamp - lastTime;
             lastTime = timestamp;
-            
-            if (gameState === 'PLAYING') {
-                update(timestamp);
-            }
-            
+            if (gameState === 'PLAYING') update(timestamp);
             draw();
             requestAnimationFrame(gameLoop);
         }
 
         function update(timestamp) {
             const progression = Math.min(score / 12000, 1);
-            
             currentBaseSpeed = config.initialBaseSpeed + (config.maxSpeed - config.initialBaseSpeed) * progression;
             currentSpawnRate = config.initialSpawnRate - (config.initialSpawnRate - config.minSpawnRate) * progression;
 
@@ -304,14 +349,9 @@
 
                 if (enemy.lane === player.lane) {
                     const verticalDistance = Math.abs(enemy.y - player.y);
-                    const collisionThreshold = (enemy.height / 2) + (player.height / 2) - config.hitboxForgiveness;
-
-                    if (verticalDistance < collisionThreshold) {
-                        handleCollision();
-                        return;
-                    }
+                    const threshold = (enemy.height / 2) + (player.height / 2) - config.hitboxForgiveness;
+                    if (verticalDistance < threshold) { handleCollision(); return; }
                 }
-
                 if (enemy.y > config.height + 200) enemies.splice(i, 1);
             }
         }
@@ -319,29 +359,21 @@
         function handleCollision() {
             gameState = 'GAMEOVER';
             gameContainer.classList.add('shake');
-            
             const finalScore = Math.floor(score);
             finalScoreDisplay.innerText = finalScore;
-            
             if (finalScore > highScore) {
                 highScore = finalScore;
                 highScoreWrap.classList.remove('hidden');
             }
-            
-            setTimeout(() => {
-                gameOverScreen.style.display = 'flex';
-            }, 300);
+            setTimeout(() => { gameOverScreen.style.display = 'flex'; }, 300);
         }
 
         function draw() {
             ctx.fillStyle = '#1e293b'; 
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
             drawRoad();
-            
             enemies.forEach(enemy => drawCar(enemy.x, enemy.y, enemy.color, true));
             drawCar(player.currentX, player.y, player.color, false);
-
             if (gameState === 'GAMEOVER') {
                 ctx.fillStyle = 'rgba(185, 28, 28, 0.2)';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -358,27 +390,13 @@
             ctx.fillRect(15, 0, 4, config.height);
             ctx.fillRect(config.width - 19, 0, 4, config.height);
 
-            const dashHeight = 40;
-            const dashGap = 60;
-            const cycleHeight = dashHeight + dashGap;
-            const startY = (roadOffset % cycleHeight) - cycleHeight;
-
+            const cycle = 100;
+            const startY = (roadOffset % cycle) - cycle;
             ctx.fillStyle = '#334155';
             for (let i = 1; i < config.laneCount; i++) {
                 const x = i * laneWidth - 2;
-                for (let y = startY; y < config.height; y += cycleHeight) {
-                    ctx.fillRect(x, y, 4, dashHeight);
-                }
-            }
-
-            if (currentBaseSpeed > 12 && gameState === 'PLAYING') {
-                ctx.globalAlpha = 0.2;
-                ctx.fillStyle = '#94a3b8';
-                const blurCycle = 150;
-                const blurY = (roadOffset * 2.5 % blurCycle) - blurCycle;
-                for (let y = blurY; y < config.height; y += blurCycle) {
-                    ctx.fillRect(18, y, 2, 80);
-                    ctx.fillRect(config.width - 20, y, 2, 80);
+                for (let y = startY; y < config.height; y += cycle) {
+                    ctx.fillRect(x, y, 4, 40);
                 }
             }
             ctx.restore();
@@ -388,34 +406,18 @@
             ctx.save();
             ctx.translate(x, y);
             if (isEnemy) ctx.rotate(Math.PI); 
-
             ctx.fillStyle = 'rgba(0,0,0,0.4)';
             ctx.fillRect(-22, -35, 54, 94);
-
             ctx.fillStyle = color;
             ctx.shadowBlur = isEnemy ? 5 : 15;
             ctx.shadowColor = color;
             roundRect(ctx, -25, -45, 50, 90, 10, true);
-
             ctx.fillStyle = isEnemy ? '#450a0a' : '#1e1b4b';
             ctx.fillRect(-18, -25, 36, 20);
             ctx.fillRect(-18, 15, 36, 15);
-
-            const grad = ctx.createLinearGradient(0, -45, 0, 45);
-            grad.addColorStop(0, 'rgba(255,255,255,0.2)');
-            grad.addColorStop(1, 'rgba(0,0,0,0.2)');
-            ctx.fillStyle = grad;
-            roundRect(ctx, -25, -45, 50, 90, 10, true);
-
-            ctx.shadowBlur = 10;
             ctx.fillStyle = isEnemy ? '#fee2e2' : '#fef08a'; 
             ctx.fillRect(-20, -42, 12, 6);
             ctx.fillRect(8, -42, 12, 6);
-
-            ctx.fillStyle = '#ef4444';
-            ctx.fillRect(-20, 38, 10, 4);
-            ctx.fillRect(10, 38, 10, 4);
-
             ctx.restore();
         }
 
@@ -435,10 +437,7 @@
         }
 
         window.addEventListener('resize', initCanvas);
-        window.onload = () => {
-            initCanvas();
-            requestAnimationFrame(gameLoop);
-        };
+        window.onload = () => { initCanvas(); requestAnimationFrame(gameLoop); };
     </script>
 </body>
 </html>
