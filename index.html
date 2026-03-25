@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>One Lane Death Race</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #020617; 
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            color: white;
+            font-family: system-ui, -apple-system, sans-serif;
+        }
+
+        #game-container {
+            position: relative;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
+            border: 4px solid #334155;
+            border-radius: 12px;
+            overflow: hidden;
+            background: #1e293b;
+        }
+
+        canvas {
+            display: block;
+            image-rendering: pixelated;
+        }
+
+        .ui-overlay {
+            position: absolute;
+            top: 1rem;
+            left: 1rem;
+            right: 1rem;
+            display: flex;
+            justify-content: space-between;
+            pointer-events: none;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            z-index: 5;
+        }
+
+        .score-value {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 2.5rem;
+            font-weight: 900;
+            color: #fbbf24;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            background: rgba(34, 197, 94, 0.2);
+            border: 1px solid rgb(34, 197, 94);
+            color: rgb(74, 222, 128);
+            border-radius: 9999px;
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+
+        #game-over-screen {
+            position: absolute;
+            inset: 0;
+            background: rgba(2, 6, 23, 0.95);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 20;
+            text-align: center;
+            backdrop-filter: blur(4px);
+        }
+
+        .intense-mode {
+            animation: pulse-red 1s infinite;
+        }
+
+        @keyframes pulse-red {
+            0% { border-color: #334155; }
+            50% { border-color: #ef4444; }
+            100% { border-color: #334155; }
+        }
+
+        /* Hit Shake Animation */
+        .shake {
+            animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both;
+        }
+
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-1px, 0, 0); }
+            20%, 80% { transform: translate3d(2px, 0, 0); }
+            30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+            40%, 60% { transform: translate3d(4px, 0, 0); }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="mb-4 text-center">
+        <h1 class="text-2xl font-bold tracking-tight text-white uppercase italic">One Lane Death Race</h1>
+        <p class="text-slate-500 text-xs tracking-[0.2em] uppercase">Status: Engine Online</p>
+    </div>
+
+    <div id="game-container">
+        <canvas id="gameCanvas"></canvas>
+        
+        <div class="ui-overlay">
+            <div>
+                <div id="difficulty-badge" class="status-badge">Normal</div>
+                <div id="fps-counter" class="text-xs mt-2 text-slate-400">60 FPS</div>
+            </div>
+            <div class="text-right">
+                <div class="text-[10px] uppercase tracking-widest text-slate-400">Distance</div>
+                <div id="score-display" class="score-value">0000</div>
+            </div>
+        </div>
+
+        <!-- Game Over UI -->
+        <div id="game-over-screen">
+            <div class="mb-2">
+                <h2 class="text-6xl font-black text-red-600 mb-2 italic tracking-tighter uppercase">Game Over</h2>
+            </div>
+            <div class="mb-8">
+                <p class="text-slate-400 uppercase tracking-[0.3em] text-xs mb-1">Final Distance</p>
+                <div id="final-score" class="text-7xl font-bold text-white">0</div>
+                <div id="high-score-wrap" class="mt-2 hidden">
+                    <span class="bg-amber-500 text-black text-[10px] font-bold px-2 py-0.5 rounded-sm uppercase tracking-tighter">New Record</span>
+                </div>
+            </div>
+            
+            <div class="flex flex-col gap-4">
+                <button id="restart-btn" class="px-12 py-4 bg-white text-slate-950 font-black rounded-sm hover:bg-amber-400 transition-all active:scale-95 uppercase tracking-widest text-lg shadow-xl shadow-white/10">
+                    Play Again
+                </button>
+                <p class="text-slate-500 text-[10px] uppercase tracking-[0.2em]">or press <span class="text-slate-300 font-bold underline">Enter</span></p>
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-6 text-slate-500 text-sm text-center">
+        <span class="text-slate-400">ARROWS TO WEAVE</span><br>
+        Speed Multiplier: <span id="difficulty-level" class="text-amber-500 font-mono">1.0x</span>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const fpsDisplay = document.getElementById('fps-counter');
+        const scoreDisplay = document.getElementById('score-display');
+        const finalScoreDisplay = document.getElementById('final-score');
+        const highScoreWrap = document.getElementById('high-score-wrap');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const difficultyBadge = document.getElementById('difficulty-badge');
+        const difficultyValueDisplay = document.getElementById('difficulty-level');
+        const gameContainer = document.getElementById('game-container');
+        const restartBtn = document.getElementById('restart-btn');
+
+        const config = {
+            width: 450, 
+            height: 700,
+            laneCount: 3,
+            initialSpawnRate: 1400,
+            initialBaseSpeed: 6,
+            maxSpeed: 22,
+            minSpawnRate: 280,
+            hitboxForgiveness: 28 
+        };
+
+        const laneWidth = config.width / config.laneCount;
+        const laneX = [laneWidth * 0.5, laneWidth * 1.5, laneWidth * 2.5];
+
+        let gameState = 'PLAYING';
+        let enemies = [];
+        let score = 0;
+        let highScore = 0;
+        let lastSpawnTime = 0;
+        let lastTime = 0;
+        let roadOffset = 0;
+        let lastLane = -1;
+
+        let currentBaseSpeed = config.initialBaseSpeed;
+        let currentSpawnRate = config.initialSpawnRate;
+
+        const player = {
+            lane: 1, 
+            y: config.height - 120,
+            width: 50,
+            height: 90,
+            color: '#a855f7',
+            targetX: laneX[1],
+            currentX: laneX[1]
+        };
+
+        function initCanvas() {
+            canvas.width = config.width;
+            canvas.height = config.height;
+            const scale = Math.min((window.innerWidth * 0.9) / config.width, (window.innerHeight * 0.8) / config.height);
+            canvas.style.width = `${config.width * scale}px`;
+            canvas.style.height = `${config.height * scale}px`;
+        }
+
+        function spawnEnemy() {
+            let randomLane;
+            do {
+                randomLane = Math.floor(Math.random() * config.laneCount);
+            } while (randomLane === lastLane);
+            
+            lastLane = randomLane;
+
+            enemies.push({
+                lane: randomLane,
+                x: laneX[randomLane],
+                y: -150, 
+                width: 50,
+                height: 90,
+                speed: currentBaseSpeed + (Math.random() * 1.5),
+                color: '#ef4444' 
+            });
+        }
+
+        function resetGame() {
+            enemies = [];
+            score = 0;
+            roadOffset = 0;
+            lastLane = -1;
+            currentBaseSpeed = config.initialBaseSpeed;
+            currentSpawnRate = config.initialSpawnRate;
+            player.lane = 1;
+            player.targetX = laneX[1];
+            player.currentX = laneX[1];
+            
+            gameState = 'PLAYING';
+            gameOverScreen.style.display = 'none';
+            highScoreWrap.classList.add('hidden');
+            gameContainer.classList.remove('shake');
+            gameContainer.classList.remove('intense-mode');
+            difficultyBadge.innerText = "Normal";
+            difficultyBadge.className = "status-badge";
+            
+            lastSpawnTime = performance.now();
+        }
+
+        restartBtn.addEventListener('click', resetGame);
+
+        window.addEventListener('keydown', (e) => {
+            if (gameState === 'PLAYING') {
+                if (e.key === 'ArrowLeft') player.lane = Math.max(0, player.lane - 1);
+                if (e.key === 'ArrowRight') player.lane = Math.min(config.laneCount - 1, player.lane + 1);
+            } else if (gameState === 'GAMEOVER' && e.key === 'Enter') {
+                resetGame();
+            }
+        });
+
+        function gameLoop(timestamp) {
+            const deltaTime = timestamp - lastTime;
+            lastTime = timestamp;
+            
+            if (gameState === 'PLAYING') {
+                update(timestamp);
+            }
+            
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function update(timestamp) {
+            const progression = Math.min(score / 12000, 1);
+            
+            currentBaseSpeed = config.initialBaseSpeed + (config.maxSpeed - config.initialBaseSpeed) * progression;
+            currentSpawnRate = config.initialSpawnRate - (config.initialSpawnRate - config.minSpawnRate) * progression;
+
+            roadOffset += currentBaseSpeed;
+            difficultyValueDisplay.innerText = (currentBaseSpeed / config.initialBaseSpeed).toFixed(1) + "x";
+            
+            if (progression > 0.8) {
+                difficultyBadge.innerText = "MAX PRESSURE";
+                difficultyBadge.className = "status-badge bg-red-900/40 border-red-500 text-red-400";
+                gameContainer.classList.add('intense-mode');
+            } else if (progression > 0.4) {
+                difficultyBadge.innerText = "Fast Lane";
+                difficultyBadge.className = "status-badge bg-amber-900/40 border-amber-500 text-amber-400";
+            }
+
+            score += (currentBaseSpeed / 10);
+            scoreDisplay.innerText = Math.floor(score).toString().padStart(4, '0');
+
+            player.targetX = laneX[player.lane];
+            player.currentX += (player.targetX - player.currentX) * 0.28;
+
+            if (timestamp - lastSpawnTime > currentSpawnRate) {
+                spawnEnemy();
+                lastSpawnTime = timestamp;
+            }
+
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                const enemy = enemies[i];
+                enemy.y += enemy.speed;
+
+                if (enemy.lane === player.lane) {
+                    const verticalDistance = Math.abs(enemy.y - player.y);
+                    const collisionThreshold = (enemy.height / 2) + (player.height / 2) - config.hitboxForgiveness;
+
+                    if (verticalDistance < collisionThreshold) {
+                        handleCollision();
+                        return;
+                    }
+                }
+
+                if (enemy.y > config.height + 200) enemies.splice(i, 1);
+            }
+        }
+
+        function handleCollision() {
+            gameState = 'GAMEOVER';
+            gameContainer.classList.add('shake');
+            
+            const finalScore = Math.floor(score);
+            finalScoreDisplay.innerText = finalScore;
+            
+            if (finalScore > highScore) {
+                highScore = finalScore;
+                highScoreWrap.classList.remove('hidden');
+            }
+            
+            setTimeout(() => {
+                gameOverScreen.style.display = 'flex';
+            }, 300);
+        }
+
+        function draw() {
+            ctx.fillStyle = '#1e293b'; 
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            drawRoad();
+            
+            enemies.forEach(enemy => drawCar(enemy.x, enemy.y, enemy.color, true));
+            drawCar(player.currentX, player.y, player.color, false);
+
+            if (gameState === 'GAMEOVER') {
+                ctx.fillStyle = 'rgba(185, 28, 28, 0.2)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+        }
+
+        function drawRoad() {
+            ctx.save();
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(0, 0, 15, config.height);
+            ctx.fillRect(config.width - 15, 0, 15, config.height);
+
+            ctx.fillStyle = '#64748b';
+            ctx.fillRect(15, 0, 4, config.height);
+            ctx.fillRect(config.width - 19, 0, 4, config.height);
+
+            const dashHeight = 40;
+            const dashGap = 60;
+            const cycleHeight = dashHeight + dashGap;
+            const startY = (roadOffset % cycleHeight) - cycleHeight;
+
+            ctx.fillStyle = '#334155';
+            for (let i = 1; i < config.laneCount; i++) {
+                const x = i * laneWidth - 2;
+                for (let y = startY; y < config.height; y += cycleHeight) {
+                    ctx.fillRect(x, y, 4, dashHeight);
+                }
+            }
+
+            if (currentBaseSpeed > 12 && gameState === 'PLAYING') {
+                ctx.globalAlpha = 0.2;
+                ctx.fillStyle = '#94a3b8';
+                const blurCycle = 150;
+                const blurY = (roadOffset * 2.5 % blurCycle) - blurCycle;
+                for (let y = blurY; y < config.height; y += blurCycle) {
+                    ctx.fillRect(18, y, 2, 80);
+                    ctx.fillRect(config.width - 20, y, 2, 80);
+                }
+            }
+            ctx.restore();
+        }
+
+        function drawCar(x, y, color, isEnemy) {
+            ctx.save();
+            ctx.translate(x, y);
+            if (isEnemy) ctx.rotate(Math.PI); 
+
+            ctx.fillStyle = 'rgba(0,0,0,0.4)';
+            ctx.fillRect(-22, -35, 54, 94);
+
+            ctx.fillStyle = color;
+            ctx.shadowBlur = isEnemy ? 5 : 15;
+            ctx.shadowColor = color;
+            roundRect(ctx, -25, -45, 50, 90, 10, true);
+
+            ctx.fillStyle = isEnemy ? '#450a0a' : '#1e1b4b';
+            ctx.fillRect(-18, -25, 36, 20);
+            ctx.fillRect(-18, 15, 36, 15);
+
+            const grad = ctx.createLinearGradient(0, -45, 0, 45);
+            grad.addColorStop(0, 'rgba(255,255,255,0.2)');
+            grad.addColorStop(1, 'rgba(0,0,0,0.2)');
+            ctx.fillStyle = grad;
+            roundRect(ctx, -25, -45, 50, 90, 10, true);
+
+            ctx.shadowBlur = 10;
+            ctx.fillStyle = isEnemy ? '#fee2e2' : '#fef08a'; 
+            ctx.fillRect(-20, -42, 12, 6);
+            ctx.fillRect(8, -42, 12, 6);
+
+            ctx.fillStyle = '#ef4444';
+            ctx.fillRect(-20, 38, 10, 4);
+            ctx.fillRect(10, 38, 10, 4);
+
+            ctx.restore();
+        }
+
+        function roundRect(ctx, x, y, width, height, radius, fill) {
+            ctx.beginPath();
+            ctx.moveTo(x + radius, y);
+            ctx.lineTo(x + width - radius, y);
+            ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+            ctx.lineTo(x + width, y + height - radius);
+            ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+            ctx.lineTo(x + radius, y + height);
+            ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+            ctx.lineTo(x, y + radius);
+            ctx.quadraticCurveTo(x, y, x + radius, y);
+            ctx.closePath();
+            if (fill) ctx.fill();
+        }
+
+        window.addEventListener('resize', initCanvas);
+        window.onload = () => {
+            initCanvas();
+            requestAnimationFrame(gameLoop);
+        };
+    </script>
+</body>
+</html>
